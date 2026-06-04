@@ -1,0 +1,14 @@
+/* frontend/src/app/globals.css */
+@import "tailwindcss";
+
+:root {
+  --background: #fcfbfa; /* Soft, warm porcelain cream */
+  --foreground: #2d312e; /* Deep charcoal sage, much softer than pure black */
+}
+
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+  min-height: 100vh;
+  letter-spacing: -0.01em; /* Clean, editorial text feel */
+}
