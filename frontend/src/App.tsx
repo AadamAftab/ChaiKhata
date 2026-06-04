@@ -1,10 +1,8 @@
-// frontend/src/app/page.tsx
-"use client";
-
-import React, { useState } from 'react';
+// frontend/src/App.tsx
+import { useState } from 'react';
 import { Wallet, Users, Compass, ShieldAlert, Sparkles } from 'lucide-react';
 
-export default function ChaiKhataDashboard() {
+export default function App() {
   const [username] = useState('aadam');
   const [burnStatus] = useState('Critical Burn');
   const [daysToBroke] = useState(4);
@@ -12,7 +10,7 @@ export default function ChaiKhataDashboard() {
   return (
     <main className="min-h-screen px-6 py-12 md:px-16 max-w-6xl mx-auto selection:bg-stone-200">
       
-      {/* MINIMALIST NAVIGATION */}
+      {/* MINIMALIST HEADLINE */}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-stone-200 pb-8 mb-12 gap-4">
         <div>
           <h1 className="text-xl font-medium tracking-tight text-stone-800">
@@ -25,7 +23,7 @@ export default function ChaiKhataDashboard() {
         </div>
       </header>
 
-      {/* SOOTHING INSIGHT BAR */}
+      {/* ALERT STRIP */}
       <div className="mb-10 p-4 bg-amber-50/60 border border-amber-100/80 rounded-xl flex items-start gap-3 text-stone-700 text-xs shadow-xs">
         <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
         <div>
@@ -33,10 +31,10 @@ export default function ChaiKhataDashboard() {
         </div>
       </div>
 
-      {/* THREE-COLUMN MINIMALIST GRID */}
+      {/* GRID MATRIX */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* CARD 1: RUNWAY FORECAST */}
+        {/* CARD 1: PERSONAL RUNWAY */}
         <div className="bg-white border border-stone-200/80 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-6">
@@ -62,7 +60,7 @@ export default function ChaiKhataDashboard() {
           </p>
         </div>
 
-        {/* CARD 2: BALANCED DEBT MATRIX */}
+        {/* CARD 2: SHARED DEBT MATRIX */}
         <div className="bg-white border border-stone-200/80 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-6">
@@ -95,7 +93,7 @@ export default function ChaiKhataDashboard() {
           </button>
         </div>
 
-        {/* CARD 3: LOCAL RADAR FEED */}
+        {/* CARD 3: CAMPUS RADAR */}
         <div className="bg-white border border-stone-200/80 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-6">

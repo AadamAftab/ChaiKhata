@@ -1,0 +1,16 @@
+/* frontend/src/index.css */
+@import "tailwindcss";
+
+:root {
+  --background: #fcfbfa; /* Warm porcelain cream */
+  --foreground: #2d312e; /* Soft charcoal sage */
+}
+
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+  min-height: 100vh;
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.01em;
+}
