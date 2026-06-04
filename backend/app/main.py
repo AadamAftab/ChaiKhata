@@ -13,7 +13,6 @@ app = FastAPI(
 # -------------------------------------------------------------------------
 # DATA REPOSITORY (In-Memory Database Sandbox)
 # -------------------------------------------------------------------------
-# This list acts as our temporary database table for individual expenses
 EXPENSE_DATA_STORE: List[dict] = []
 
 # -------------------------------------------------------------------------
@@ -31,7 +30,7 @@ class ExpenseCreateSchema(BaseModel):
                 "amount": 180.50,
                 "source": "Zepto",
                 "category": "Snacks",
-                "description": "Late-night instant Maggi and ice cream haul"
+                "description": "Late-night instant Maggi haul"
             }
         }
 
@@ -49,18 +48,8 @@ def read_root():
 # -------------------------------------------------------------------------
 # TRANSACTIONAL API ENDPOINTS
 # -------------------------------------------------------------------------
-@app.post(
-    "/api/v1/expenses/", 
-    response_model=dict, 
-    status_code=status.HTTP_201_CREATED,
-    summary="Log a localized transaction"
-)
+@app.post("/api/v1/expenses/", status_code=status.HTTP_201_CREATED)
 def log_student_expense(expense_payload: ExpenseCreateSchema):
-    """
-    Ingests, validates, and logs an incoming student expense token.
-    Enforces normalization mapping for standard campus options.
-    """
-    # Standardize common strings to avoid duplicate variations in analytics
     source_mapping = {
         "zepto": "Zepto",
         "zomato": "Zomato",
@@ -68,11 +57,9 @@ def log_student_expense(expense_payload: ExpenseCreateSchema):
         "cali burrito": "Cali Burrito",
         "cash": "Cash"
     }
-    
     normalized_source = expense_payload.source.strip().lower()
     final_source = source_mapping.get(normalized_source, expense_payload.source.strip())
 
-    # Build the database item profile
     new_id = len(EXPENSE_DATA_STORE) + 1
     expense_document = {
         "id": new_id,
@@ -82,28 +69,80 @@ def log_student_expense(expense_payload: ExpenseCreateSchema):
         "description": expense_payload.description.strip() if expense_payload.description else None,
         "timestamp": datetime.now().isoformat()
     }
-    
     EXPENSE_DATA_STORE.append(expense_document)
-    return {
-        "message": "Transaction token logged successfully",
-        "transaction_id": new_id,
-        "data": expense_document
-    }
+    return {"message": "Transaction token logged successfully", "transaction_id": new_id}
 
-@app.get(
-    "/api/v1/expenses/", 
-    response_model=dict, 
-    status_code=status.HTTP_200_OK,
-    summary="Fetch full transactional ledger"
-)
+@app.get("/api/v1/expenses/")
 def fetch_all_expenses():
+    return {"total_count": len(EXPENSE_DATA_STORE), "ledger": EXPENSE_DATA_STORE}
+
+# -------------------------------------------------------------------------
+# MATHEMATICAL ANALYTICS ENGINE (Step 3)
+# -------------------------------------------------------------------------
+@app.get(
+    "/api/v1/analytics/runway/", 
+    status_code=status.HTTP_200_OK,
+    summary="Calculate financial burn rate and runway velocity"
+)
+def calculate_financial_runway(monthly_allowance: float = 5000.00):
     """
-    Exposes the complete in-memory ledger list array sorted descending by newest entries.
+    Evaluates total expenditures against an allowance parameter.
+    Computes daily spending velocity and predicts exact days until financial exhaustion.
     """
-    # Returns newest items first
-    sorted_ledger = sorted(EXPENSE_DATA_STORE, key=lambda x: x["id"], reverse=True)
+    if monthly_allowance <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Monthly allowance parameter must be greater than zero."
+        )
+
+    # 1. Calculate total outflow from our repository loop
+    total_spent = sum(item["amount"] for item in EXPENSE_DATA_STORE)
+    remaining_balance = max(0.00, monthly_allowance - total_spent)
+
+    if not EXPENSE_DATA_STORE:
+        return {
+            "total_spent": 0.00,
+            "remaining_balance": monthly_allowance,
+            "daily_burn_velocity": 0.00,
+            "days_to_broke": "Infinite",
+            "burn_status": "STABLE",
+            "message": "No expenses recorded yet. Your financial status is completely stable."
+        }
+
+    # 2. Parse timestamps to track chronological days elapsed
+    timestamps = [datetime.fromisoformat(item["timestamp"]) for item in EXPENSE_DATA_STORE]
+    oldest_tx = min(timestamps)
+    newest_tx = max(timestamps)
+    
+    # Compute the delta span of active usage (ensure minimum of 1 day to prevent DivisionByZero)
+    days_elapsed = (newest_tx - oldest_tx).days + 1
+    
+    # 3. Compute core velocity math metrics
+    daily_burn_velocity = round(total_spent / days_elapsed, 2)
+    
+    if daily_burn_velocity > 0:
+        days_to_broke = int(remaining_balance // daily_burn_velocity)
+    else:
+        days_to_broke = 999  # Safe fallback if items exist but value is zero
+
+    # 4. Generate dynamic, student-friendly threat assessment levels
+    # Let's say a baseline safe daily speed for an Indian hostel student is ₹200/day
+    if daily_burn_velocity > 350:
+        burn_status = "CRITICAL_BURN"
+        message = "⚠️ Danger! Your food/Zepto spending velocity is unsustainable. Slow down immediately."
+    elif daily_burn_velocity > 200:
+        burn_status = "ELEVATED"
+        message = "Warning: Spending velocity is climbing. Consider cutting back on dining out."
+    else:
+        burn_status = "STABLE"
+        message = "Excellent. Your spending velocity is entirely within safe parameters."
+
     return {
-        "engine_node": "IIITB_SANDBOX_STORE",
-        "total_records": len(EXPENSE_DATA_STORE),
-        "ledger": sorted_ledger
+        "total_spent": round(total_spent, 2),
+        "remaining_balance": round(remaining_balance, 2),
+        "days_elapsed_in_tracking": days_elapsed,
+        "daily_burn_velocity": daily_burn_velocity,
+        "days_to_broke": days_to_broke,
+        "burn_status": burn_status,
+        "alert_message": message
     }

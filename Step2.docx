@@ -1,0 +1,43 @@
+1. The Pydantic Data Contract (ExpenseCreateSchema)
+When you are writing software that accepts inputs from the internet, you have to assume that the input data is going to be messy or malformed. Pydantic is the library that acts as your backend's security guard.
+class ExpenseCreateSchema(BaseModel):
+    amount: float = Field(..., gt=0)
+    source: str
+    category: str
+    description: Optional[str] = Field(None, max_length=150)
+BaseModel: By inheriting from Pydantic's BaseModel, you are telling Python: "This class isn't just a standard container; it is a rigid blueprint for incoming data."
+
+Field(..., gt=0): The ellipses (...) indicate that this field is strictly required—if a user tries to log an expense without an amount, the server will block it. gt=0 is a validation constraint meaning Greater Than 0. Pydantic will instantly reject a transaction if a student tries to input a negative number or a zero.
+
+Optional[str] = Field(None, max_length=150): This tells Python that a user can leave the description blank (None). However, if they do type a description, it cannot exceed 150 characters. This prevents malicious users from crashing your system by pasting a 50-page text file into a simple description box.
+
+2. How Data Validation Prevents System Crashes
+If a client sends data that breaks your Pydantic rules, FastAPI doesn't pass that broken data into your Python function. Instead, it intercepts it immediately at the doorway and sends back a structured HTTP 422 Unprocessable Entity error payload.
+
+This is critical because it ensures that once the data actually reaches your internal function logic (log_student_expense), you can be 100% mathematically certain that expense_payload.amount is a valid floating-point number greater than zero, completely protecting your calculations from breaking.
+
+3. The In-Memory Database Sandbox (EXPENSE_DATA_STORE)
+EXPENSE_DATA_STORE: List[dict] = []
+Right now, we are storing data inside a standard Python list containing dictionaries.
+
+When you execute a POST request, the server instantiates an active document dictionary, calculates a sequential ID (len(EXPENSE_DATA_STORE) + 1), and runs .append() to shove it into that list.
+
+When you execute a GET request, the server reads that same list, sorts it so the newest records appear at the top, and wraps it in a response dictionary.
+
+The Catch: Because this is stored in-memory (RAM), this data is volatile. If you close your terminal or if your code crashes and Uvicorn restarts, this list wipes completely clean back to []. This is exactly what we want for a sandbox phase because it lets us experiment and alter properties without needing to worry about complex database migrations or corrupting files yet.
+
+4. String Normalization (Avoiding Data Fragmentation)
+One of the most common issues in data engineering is string inconsistency. If one user logs an item as "zepto", another types "Zepto ", and a third types "ZEPTO", a computer sees them as three completely unique companies. When you try to run math on how much you spent on Zepto later, your filters will break.
+source_mapping = {
+    "zepto": "Zepto",
+    "zomato": "Zomato",
+    "swiggy": "Swiggy",
+    "cali burrito": "Cali Burrito",
+    "cash": "Cash"
+}
+normalized_source = expense_payload.source.strip().lower()
+.strip(): Removes any accidental whitespace spaces a user might have typed at the beginning or end of the input string.
+
+.lower(): Converts the string entirely to lowercase letters.
+
+.get(): Checks our predefined dictionary blueprint. If it matches a known campus vendor, it overrides whatever messy text the user typed with a pristine, capitalized string ("Zepto"). If a user types an unknown local venue, it safely falls back to keeping their raw entry. This keeps our dataset completely uniform.

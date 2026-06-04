@@ -1,0 +1,76 @@
+two distinct folders- frontend and backend
+
+For backend used fastAPI - it is the brain. interacts with the database, runs on a server, runs heavy calculations and handles security. It isnt concerned with the looks of the app. It only processes raw data.
+For frontend - face of the product. lives in the users browser. only job is to render charts, look pretty, display text fields, and capture button clicks, which it then packages up and ships to the backend brain via internet requests.
+
+python virtual environment - when u run python -m venv venv, you are creating an isolated sandbox in your project 
+If you install Python libraries globally on your computer, different projects will eventually fight over different versions of the same library, crashing your system. The venv acts like a walled garden. When we ran source venv/bin/activate, we told your terminal terminal: "For the rest of this session, only look inside this specific garden. Ignore the rest of the computer."
+
+pinning dependencies:
+Inside requirements.txt, we typed very specific version numbers, like fastapi==0.111.0.
+
+In open-source software, packages update constantly. If we just wrote fastapi without a version, a year from now someone might download your code, pip would install fastapi version 2.0.0 (which might have completely redesigned syntax), and your app would instantly break. Hard-coding the exact versions ensures your code runs flawlessly forever on any machine.
+
+server code:
+from fastapi import FastAPI, status
+from datetime import datetime
+Python doesn't load every tool it owns automatically to keep things fast. We are explicitly telling Python to open up the fastapi toolset and pull out two specific instruments: the FastAPI application builder and the HTTP status code dictionary. We also grab datetime to read your computer's internal clock.
+
+app = FastAPI(
+    title="ChaiKhata Core Engine",
+    description="The foundational API engine...",
+    version="1.0.0"
+)
+app = FastAPI(...): This line instantiates your web server object. We assign it to a variable named app. The configuration settings inside the parentheses (title, description) are metadata tokens. FastAPI reads these tokens to dynamically build your interactive /docs documentation page automatically without you writing a single line of HTML.
+
+@app.get("/", status_code=status.HTTP_200_OK)
+def read_root():@app.get("/"): This is a Decorator. It tells your server: "Listen constantly to the incoming web traffic. If a browser navigates to the root URL / (the homepage), immediately stop what you are doing and execute the Python function written directly underneath me.
+
+status_code=status.HTTP_200_OK: In web development, computers talk to each other using numeric status shortcuts. 200 OK means everything worked perfectly. 404 means a page wasn't found. 500 means the backend code crashed. We explicitly tell the server to return a clean 200 code alongside our data.
+def read_root():: This is a standard Python function declaration. It defines the specific logical block that runs when someone hits the / route.
+
+return {
+        "status": "online",
+        "system_node": "ChaiKhata_API_V1",
+        "timestamp": datetime.now().isoformat(),
+        "message": "Workspace initialization completely successful..."
+    }
+return { ... }: This returns a Python Dictionary (a collection of key-value pairs). When this dictionary leaves your Python file and enters the network, FastAPI automatically transforms it into a standard text format called JSON (JavaScript Object Notation). JSON is the universal language of the internet; any frontend framework (like React or Next.js) can read it instantly.
+
+5. Running the Engine (uvicorn app.main:app --reload)
+FastAPI is just code; it doesn't know how to listen to network hardware ports on its own. Uvicorn is a specialized, lightning-fast lightning web server engine (an ASGI server).
+
+app.main:app tells Uvicorn: "Go look inside the app folder, open the main.py file, and run the server instance instance named app."
+
+--reload is a development flag. It tells Uvicorn to watch your code files constantly. The moment you press Cmd+S or Ctrl+S to save a change, it restarts the server in milliseconds so you can test your changes live without manual terminal input.
+
+
+6. The Git Milestone (.gitignore & commits)
+When we initialized Git, we created a .gitignore text file. We typed paths like backend/venv/ inside it. This instructs Git: "Never upload my virtual environment folder to the repository history." This is crucial because venv contains thousands of third-party files that belong to the internet, not your custom code. Your repository should stay small and only hold files you actually wrote.
+
+Your commit locked this entire state into a secure cryptographic snapshot.
+
+ASGI stands for Asynchronous Server Gateway Interface.
+
+The Evolution: WSGI vs. ASGI
+Before ASGI, the universal standard for Python web apps was WSGI (Web Server Gateway Interface), which was built for older frameworks like Django and Flask.
+
+The Problem with WSGI (Synchronous): WSGI is strictly one-at-a-time per execution thread. If a user requests a data log, the server handles it from start to finish. If that request takes 5 seconds (e.g., waiting to download a large Zepto delivery history file), that entire worker thread is completely blocked. No other user can use that thread until the 5 seconds are up. To handle multiple users, you have to spin up massive amounts of computer memory.
+
+The Solution: ASGI (Asynchronous): ASGI was created to bring async/await capabilities to Python web servers. It allows your server to handle thousands of concurrent events simultaneously without blocking your machine's hardware.
+
+How an ASGI Server (Like Uvicorn) Works
+Think of your server like a busy fast-food restaurant counter:
+
+The Old WSGI Way: A customer orders a complex meal. The cashier takes the order, walks back to the kitchen, waits for the burger to cook, plates it, brings it to the customer, and only then takes the order of the next person standing in line. If the kitchen is slow, the entire line stays stuck.
+
+The New ASGI Way (Uvicorn): A customer orders a complex meal. The ASGI cashier takes the order, hands a ticket to the kitchen, and immediately turns to the next person in line to take their order. While the first customer's burger is cooking, the cashier continues processing other people. When the kitchen shouts that the first burger is ready, the cashier pauses for a split second, hands the food to the first customer, and goes right back to taking orders.
+
+Why ASGI is Critical for Your Ecosystem (ChaiKhata)
+Because you chose FastAPI, you are naturally utilizing ASGI under the hood via Uvicorn. This gives your project two massive real-world superpowers that WSGI simply cannot handle:
+
+Handling Scale Efficiencies: If 50 students open your app at the exact same moment to look up local Cali Burrito reviews, an ASGI server can juggle all 50 network connections simultaneously on a single tiny server instance without lagging or crashing.
+
+Real-Time Data Streaming (WebSockets): Later on, when you build features like the Trip/Campaign Tracker where multiple friends are looking at the same bill dynamically, or a real-time ledger update, ASGI can keep a persistent, continuous open connection (a WebSocket) between the server and everyone's phone. Data can flash back and forth instantly in real-time without the app needing to constantly hit a refresh button.
+
+In short, Uvicorn is your ASGI server wrapper. It is the core engine that turns your Python code scripts into a highly concurrent, production-grade network machine.
