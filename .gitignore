@@ -1,0 +1,22 @@
+# Python virtual environments
+backend/venv/
+backend/.venv/
+env/
+venv/
+ENV/
+
+# Python caching and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+#development steps
+development_steps.docx
+
