@@ -4,26 +4,28 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from datetime import datetime
 
-app = FastAPI(
-    title="ChaiKhata Core Engine",
-    description="Backend operations engine for individual portfolio analytics, social debt ledgers, and campus guide pipelines.",
-    version="1.0.0"
-)
+app = FastAPI(title="ChaiKhata Premium Engine", version="1.1.0")
 
 # -------------------------------------------------------------------------
-# DATA REPOSITORIES (In-Memory Sandbox Databases)
+# GLOBAL IN-MEMORY REPOSITORIES
 # -------------------------------------------------------------------------
 EXPENSE_DATA_STORE: List[dict] = []
+USER_PROFILES: Dict[str, str] = {}  # username -> display_name
+MUTUAL_DEBT_LEDGER: Dict[str, Dict[str, float]] = {}
 
-# New in-memory ledgers for social tracking
-USER_PROFILES: Dict[str, str] = {}  # Maps username -> Display Name
-MUTUAL_DEBT_LEDGER: Dict[str, Dict[str, float]] = {} 
-# Structured as: { "User_A": { "User_B": balance } }
-# Net Balance rule: If MUTUAL_DEBT_LEDGER["Aarav"]["Vinay"] == 150.0,
-# it means Aarav owes Vinay ₹150.0. If negative, Vinay owes Aarav.
+# Step 5 Structural Database Container
+CAMPAIGN_STORE: Dict[str, dict] = {}
+# Schema layout: 
+# {
+#   "gokarna_2026": {
+#        "title": "Gokarna Surf Trip",
+#        "members": ["aadam", "aarav", "vinay"],
+#        "queue": [ {transaction_document} ]
+#   }
+# }
 
 # -------------------------------------------------------------------------
-# DATA VALIDATION CONTRACTS (Pydantic Schemas)
+# VALIDATION MODULE CONTRACTS (Pydantic Schemas)
 # -------------------------------------------------------------------------
 class ExpenseCreateSchema(BaseModel):
     amount: float = Field(..., gt=0)
@@ -32,135 +34,143 @@ class ExpenseCreateSchema(BaseModel):
     description: Optional[str] = Field(None, max_length=150)
 
 class ProfileCreateSchema(BaseModel):
-    username: str = Field(..., min_length=3, max_length=20, description="Unique identifier handle, e.g., 'aarav_11'")
-    display_name: str = Field(..., min_length=2, max_length=50, description="Real name, e.g., 'Aarav Sharma'")
+    username: str = Field(..., min_length=3, max_length=20)
+    display_name: str = Field(..., min_length=2, max_length=50)
 
 class PeerSplitSchema(BaseModel):
-    payer: str = Field(..., description="The username of the friend who paid the bill upfront.")
-    borrower: str = Field(..., description="The username of the friend splitting the bill who owes money.")
-    total_bill: float = Field(..., gt=0, description="The total amount of the transaction.")
-    split_amount: Optional[float] = Field(default=None, description="Optional custom share. If blank, defaults to a clean 50/50 split.")
-    description: Optional[str] = Field(None, max_length=150, description="Context, e.g., 'Cali Burrito lunch'")
+    payer: str
+    borrower: str
+    total_bill: float
+    split_amount: Optional[float] = None
+    description: Optional[str] = None
+
+# Step 5: Campaign Engineering Schemas
+class CampaignCreateSchema(BaseModel):
+    campaign_id: str = Field(..., min_length=3, max_length=30, description="URL safe unique identifier, e.g., 'gokarna_2026'")
+    title: str = Field(..., min_length=3, max_length=100, description="Display name, e.g., 'Gokarna Beach Trip'")
+    members: List[str] = Field(..., min_length=2, description="List of participant usernames involved in this container.")
+
+class CampaignTransactionSchema(BaseModel):
+    payer: str = Field(..., description="The user who paid the total bill upfront.")
+    total_bill: float = Field(..., gt=0, description="Total cost of this individual item.")
+    description: str = Field(..., max_length=150, description="e.g., 'Seafood & Veg Dinner at Beach Shack'")
+    is_itemized: bool = Field(default=False, description="Set to True if split is unequal based on custom consumption.")
+    # If is_itemized is True, allocations maps username -> exact cost they owe
+    allocations: Optional[Dict[str, float]] = Field(default=None, description="Explicit cost breakdown mapping per user.")
 
 # -------------------------------------------------------------------------
-# CORE LOGIC ROUTING
+# FALLBACK PASS ENDPOINTS (Steps 2 - 4)
 # -------------------------------------------------------------------------
-@app.get("/", status_code=status.HTTP_200_OK)
-def read_root():
-    return {"status": "online", "system": "ChaiKhata Core API Node"}
+@app.get("/")
+def read_root(): return {"status": "online", "engine": "ChaiKhata Premium Node"}
 
-@app.post("/api/v1/expenses/", status_code=status.HTTP_201_CREATED)
-def log_student_expense(expense_payload: ExpenseCreateSchema):
-    new_id = len(EXPENSE_DATA_STORE) + 1
-    expense_document = {
-        "id": new_id,
-        "amount": round(expense_payload.amount, 2),
-        "source": expense_payload.source.strip(),
-        "category": expense_payload.category.strip(),
+@app.post("/api/v1/profiles/", status_code=status.HTTP_201_CREATED)
+def create_user_profile(profile: ProfileCreateSchema):
+    u = profile.username.strip().lower()
+    if u in USER_PROFILES: raise HTTPException(400, "Profile matches an existing node.")
+    USER_PROFILES[u] = profile.display_name.strip()
+    MUTUAL_DEBT_LEDGER[u] = {}
+    return {"message": "Profile initialized", "username": u}
+
+# -------------------------------------------------------------------------
+# SYSTEM CAMPAIGN & TRIP ENGINE OPERATIONS (Step 5)
+# -------------------------------------------------------------------------
+@app.post("/api/v1/campaigns/", status_code=status.HTTP_201_CREATED, summary="Initialize a shared Trip/Campaign vault")
+def create_campaign_vault(campaign: CampaignCreateSchema):
+    c_id = campaign.campaign_id.strip().lower()
+    if c_id in CAMPAIGN_STORE:
+        raise HTTPException(400, detail="Campaign identifier already active.")
+    
+    # Verify all group members exist as registered users in our app
+    for member in campaign.members:
+        member_clean = member.strip().lower()
+        if member_clean not in USER_PROFILES:
+            raise HTTPException(404, detail=f"Member registration check failed: User '{member_clean}' does not exist.")
+
+    CAMPAIGN_STORE[c_id] = {
+        "title": campaign.title.strip(),
+        "members": [m.strip().lower() for m in campaign.members],
+        "queue": []
+    }
+    return {"message": "Shared campaign vault deployed successfully", "campaign_id": c_id}
+
+@app.post("/api/v1/campaigns/{campaign_id}/transactions/", status_code=status.HTTP_200_OK, summary="Push an itemized or equal transaction into a trip queue")
+def push_campaign_transaction(campaign_id: str, tx_payload: CampaignTransactionSchema):
+    c_id = campaign_id.strip().lower()
+    if c_id not in CAMPAIGN_STORE:
+        raise HTTPException(404, detail="Target campaign vault context not found.")
+
+    payer_clean = tx_payload.payer.strip().lower()
+    if payer_clean not in CAMPAIGN_STORE[c_id]["members"]:
+        raise HTTPException(400, detail="The specified transaction payer must be an registered member of this specific campaign.")
+
+    # Validation and processing logic for custom itemized breakdowns (Gokarna Veg/Non-Veg Case)
+    if tx_payload.is_itemized:
+        if not tx_payload.allocations:
+            raise HTTPException(400, detail="Allocations map must be provided if is_itemized flag is set to True.")
+        
+        # Ensure sum of explicit allocations matches the total bill precisely to avoid leakage
+        allocation_sum = sum(tx_payload.allocations.values())
+        if abs(allocation_sum - tx_payload.total_bill) > 0.05:
+            raise HTTPException(400, detail=f"Data verification crash: Itemized allocation matrix sum (₹{allocation_sum}) does not match Total Bill amount (₹{tx_payload.total_bill}).")
+    
+    # Save transaction block directly into the chronological array queue
+    tx_document = {
+        "id": len(CAMPAIGN_STORE[c_id]["queue"]) + 1,
+        "payer": payer_clean,
+        "total_bill": round(tx_payload.total_bill, 2),
+        "description": tx_payload.description.strip(),
+        "is_itemized": tx_payload.is_itemized,
+        "allocations": tx_payload.allocations if tx_payload.is_itemized else None,
         "timestamp": datetime.now().isoformat()
     }
-    EXPENSE_DATA_STORE.append(expense_document)
-    return {"message": "Transaction token logged successfully", "transaction_id": new_id}
-
-@app.get("/api/v1/expenses/")
-def fetch_all_expenses():
-    return {"ledger": EXPENSE_DATA_STORE}
-
-@app.get("/api/v1/analytics/runway/")
-def calculate_financial_runway(monthly_allowance: float = 5000.00):
-    total_spent = sum(item["amount"] for item in EXPENSE_DATA_STORE)
-    remaining_balance = max(0.00, monthly_allowance - total_spent)
-    return {"total_spent": total_spent, "remaining_balance": remaining_balance}
-
-# -------------------------------------------------------------------------
-# SOCIAL LEDGER OPERATIONS ENDPOINTS (Step 4)
-# -------------------------------------------------------------------------
-@app.post(
-    "/api/v1/profiles/", 
-    status_code=status.HTTP_201_CREATED,
-    summary="Register a peer campus profile"
-)
-def create_user_profile(profile: ProfileCreateSchema):
-    """
-    Registers a friend into the network tracking layer and initializes their empty ledger matrix.
-    """
-    username_clean = profile.username.strip().lower()
     
-    if username_clean in USER_PROFILES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Profile with username '{username_clean}' already exists within this node."
-        )
-        
-    USER_PROFILES[username_clean] = profile.display_name.strip()
-    MUTUAL_DEBT_LEDGER[username_clean] = {}
-    return {
-        "message": "Peer profile initialized successfully",
-        "username": username_clean,
-        "display_name": USER_PROFILES[username_clean]
-    }
+    CAMPAIGN_STORE[c_id]["queue"].append(tx_document)
+    return {"message": "Transaction token queued successfully into campaign", "tx_id": tx_document["id"]}
 
-@app.post(
-    "/api/v1/splits/", 
-    status_code=status.HTTP_200_OK,
-    summary="Log a mutual transaction split between two friends"
-)
-def log_peer_transaction_split(split_payload: PeerSplitSchema):
-    """
-    Processes a financial split transaction. Computes proportional shares
-    and registers balances bidirectionally inside the network adjacency map.
-    """
-    payer = split_payload.payer.strip().lower()
-    borrower = split_payload.borrower.strip().lower()
+@app.get("/api/v1/campaigns/{campaign_id}/settle/", status_code=status.HTTP_200_OK, summary="Execute multi-way itemized matrix settlement calculations")
+def calculate_campaign_settlement(campaign_id: str):
+    c_id = campaign_id.strip().lower()
+    if c_id not in CAMPAIGN_STORE:
+        raise HTTPException(404, detail="Target campaign vault context not found.")
 
-    if payer not in USER_PROFILES or borrower not in USER_PROFILES:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="One or both of the specified usernames do not exist in the active system profiles."
-        )
-        
-    if payer == borrower:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Self-referential splits are invalid. Payer and borrower must be distinct accounts."
-        )
+    campaign = CAMPAIGN_STORE[c_id]
+    members = campaign["members"]
+    
+    # Initialize metric tracking grids
+    total_trip_cost = 0.00
+    amount_paid_by_user = {m: 0.00 for m in members}
+    debt_incurred_by_user = {m: 0.00 for m in members}
 
-    # If no custom share is specified, split the bill evenly down the middle (50/50 split)
-    allocated_debt = split_payload.split_amount if split_payload.split_amount else (split_payload.total_bill / 2)
-    allocated_debt = round(allocated_debt, 2)
+    # Iterate through the entire transaction queue
+    for tx in campaign["queue"]:
+        total_trip_cost += tx["total_bill"]
+        amount_paid_by_user[tx["payer"]] += tx["total_bill"]
 
-    # Update Payer -> Borrower matrix balance tracking
-    # If borrower isn't in payer's dictionary yet, initialize their balance at 0.0
-    if borrower not in MUTUAL_DEBT_LEDGER[payer]:
-        MUTUAL_DEBT_LEDGER[payer][borrower] = 0.0
-    if payer not in MUTUAL_DEBT_LEDGER[borrower]:
-        MUTUAL_DEBT_LEDGER[borrower][payer] = 0.0
+        if tx["is_itemized"]:
+            # Apply strict custom weight allocations
+            for member in members:
+                member_debt = tx["allocations"].get(member, 0.00)
+                debt_incurred_by_user[member] += member_debt
+        else:
+            # Fallback to absolute standard equal distribution split
+            split_share = tx["total_bill"] / len(members)
+            for member in members:
+                debt_incurred_by_user[member] += split_share
 
-    # Execute directional balancing
-    # Payer ledger tracks that the borrower owes them positive funds
-    MUTUAL_DEBT_LEDGER[borrower][payer] = round(MUTUAL_DEBT_LEDGER[borrower][payer] + allocated_debt, 2)
-    # Borrower ledger tracks that they owe the payer negative funds
-    MUTUAL_DEBT_LEDGER[payer][borrower] = round(MUTUAL_DEBT_LEDGER[payer][borrower] - allocated_debt, 2)
+    # Compute Net Status vectors: Paid - Incurred
+    net_balances = {}
+    for m in members:
+        net_balances[m] = round(amount_paid_by_user[m] - debt_incurred_by_user[m], 2)
 
     return {
-        "status": "MUTUAL_LEDGER_MUTATED",
-        "message": f"Successfully recorded split. {USER_PROFILES[borrower]} owes {USER_PROFILES[payer]} ₹{allocated_debt}.",
-        "current_balance_summary": {
-            f"{payer}_view": f"Net from {borrower}: +₹{MUTUAL_DEBT_LEDGER[borrower][payer]}",
-            f"{borrower}_view": f"Net to {payer}: -₹{MUTUAL_DEBT_LEDGER[borrower][payer]}"
-        }
-    }
-
-@app.get(
-    "/api/v1/splits/ledger/",
-    status_code=status.HTTP_200_OK,
-    summary="Fetch full directional balance sheets"
-)
-def fetch_social_balances():
-    """
-    Exposes the raw state maps showing exactly who owes what across the node.
-    """
-    return {
-        "active_profiles": USER_PROFILES,
-        "directional_matrix": MUTUAL_DEBT_LEDGER
+        "campaign_id": c_id,
+        "campaign_title": campaign["title"],
+        "analytics_summary": {
+            "total_combined_expenditure": round(total_trip_cost, 2),
+            "per_capita_contributions": amount_paid_by_user,
+            "actual_consumption_debts": debt_incurred_by_user
+        },
+        "resolution_balances": net_balances,
+        "instructions": "Positive metrics indicate the campaign owes that user. Negative metrics indicate the user must pay into the vault to balance the node."
     }
